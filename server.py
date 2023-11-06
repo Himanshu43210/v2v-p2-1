@@ -4,9 +4,7 @@ import asyncio
 import websockets
 import json
 import socket
-import wave
 import pyaudio
-import threading
 import os
 import json
 import uuid
@@ -110,8 +108,6 @@ if not DEEPGRAM_API_KEY:
 # Define the Deepgram WebSocket URL with query parameters for transcription options
 DEEPGRAM_URL = f"wss://api.deepgram.com/v1/listen?punctuate=true&encoding=linear16&sample_rate=44100"
 
-
-# Function to transcribe streaming audio
 async def transcribe_socket(conn):
     async with websockets.connect(
         DEEPGRAM_URL,
@@ -121,7 +117,7 @@ async def transcribe_socket(conn):
 
         async def send_audio_from_socket():
             while True:
-                data = conn.recv(4096)  # Increase buffer size for streaming
+                data = conn.recv(4096)
                 if not data:
                     break
                 await dg_websocket.send(data)
@@ -137,7 +133,6 @@ async def transcribe_socket(conn):
                         if transcript:
                             full_transcript += transcript
                             print("Transcript:", transcript)
-                            handle_gpt_response(transcript)
                         else:
                             print("Received an empty transcript - the audio might not be recognized.")
             except websockets.exceptions.ConnectionClosedOK:
@@ -172,8 +167,9 @@ async def chat_with_user(conn, addr):
 
         while True:
         # Start the transcription coroutine
-            query = await transcribe_socket(conn)
-            print(query)
+            transcript = await transcribe_socket(conn)
+            print(transcript)
+            query=transcript
 
             if query.lower() == "exit":
                 break
