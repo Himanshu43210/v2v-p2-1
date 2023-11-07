@@ -21,14 +21,13 @@ from dotenv import load_dotenv
 import asyncio
 import openai
 
-
-BUFFER_SIZE = 1024
 # Load environment variables from .env file
 load_dotenv()
 
 # Access environment variables
 PPLX_API_KEY = os.environ.get("PPLX_API_KEY")
 os.environ["PPLX_API_KEY"] = PPLX_API_KEY
+DEEPGRAM_API_KEY = os.getenv('DEEPGRAM_API_KEY')
 
 model_name="llama-2-70b-chat"
 
@@ -37,6 +36,7 @@ sys.path.append("./constants")
 # import speech_to_text
 from speech_to_text import transcribe_socket
 from dictionary import phrases_dict
+from speech_to_text_og import Transcriber
 
 def generate_unique_id():
     return str(uuid.uuid4())
@@ -92,83 +92,13 @@ def handle_gpt_response(full_content):
             processed_sentences.add(sentence)
 
 
-# Define PyAudio parameters
-FORMAT = pyaudio.paInt16
-CHANNELS = 1
-RATE = 44100
-CHUNK_SIZE = 1024
-p = pyaudio.PyAudio()
-
-# Deepgram API credentials
-DEEPGRAM_API_KEY = os.getenv('DEEPGRAM_API_KEY')
-
-# Ensure the API key is available
-if not DEEPGRAM_API_KEY:
-    raise ValueError("The Deepgram API key is not set in the environment variables.")
-
-# Define the Deepgram WebSocket URL with query parameters for transcription options
-DEEPGRAM_URL = f"wss://api.deepgram.com/v1/listen?punctuate=true&encoding=linear16&sample_rate=44100"
-
-async def transcribe_socket_udp(server_socket):
-    async with websockets.connect(
-        DEEPGRAM_URL,
-        extra_headers={"Authorization": f"Token {DEEPGRAM_API_KEY}"},
-        ping_timeout=None,
-    ) as dg_websocket:
-
-        transcription_received = asyncio.Event()
-
-        async def send_audio_from_socket():
-            while True:
-                data, addr = server_socket.recvfrom(4096)  # buffer size is 4096 bytes
-                # data, addr = server_socket.recvfrom(BUFFER_SIZE)
-                if not data:
-                    break
-                await dg_websocket.send(data)
-            await dg_websocket.send(b'')
-
-
-        async def receive_transcriptions():
-            try:
-                async for message in dg_websocket:
-                    data = json.loads(message)
-                    if 'channel' in data and 'alternatives' in data['channel']:
-                        transcript = data['channel']['alternatives'][0]['transcript']
-                        if transcript:
-                            print("Transcript:", transcript)
-                            transcription_received.set()  # Notify that we received a transcription
-                            return transcript  # Return immediately after receiving a non-empty transcript
-                        else:
-                            print("Received an empty transcript - the audio might not be recognized.")
-            except websockets.exceptions.ConnectionClosedOK:
-                pass  # Connection was closed cleanly
-            except Exception as e:
-                print(f"An error occurred: {e}")
-            return None
-
-        sender_task = asyncio.create_task(send_audio_from_socket())
-        receiver_task = asyncio.create_task(receive_transcriptions())
-
-        # Wait for the transcription received event or for both tasks to complete
-        done, pending = await asyncio.wait(
-            {sender_task, receiver_task, transcription_received.wait()},
-            return_when=asyncio.FIRST_COMPLETED
-        )
-
-        if transcription_received.is_set():
-            sender_task.cancel()  # Cancel the sender task since we got our transcription
-
-        # This will either be the non-empty transcript or None
-        return await receiver_task
-
-# Modify the chat_with_user function to work asynchronously
 async def chat_with_user_udp(addr, server_socket):
     print(f"Connected by {addr}")
     messages = [
         {
             "role": "system",
             "content": (
-                "Agent: Jacob. Company: Gadget Hub. Task: Demo. Product: Google Pixel. Features: Night Sight, Portrait Mode, Astrophotography, Super Res Zoom, video stabilization. Battery: All-day. Objective: Google Pixel over iPhone. Discuss features. Interest? Shop visit. Agree? Name, contact. Address inquiries. Details given? End: great day.you are Jacob. Only respond to the last query in short."
+                "Agent: Jacob. Company: Gadget Hub. Task: Demo. Product: Google Pixel. Features: Night Sight, Portrait Mode, Astrophotography, Super Res Zoom, video stabilization. Battery: All-day. Objective: Google Pixel over iPhone. Discuss features. Interest? Shop visit. Agree? Name, contact. Address inquiries. Details given? End: great day.you are Jacob. Only respond to the last query in very short."
             ),
         }
     ]
@@ -178,73 +108,69 @@ async def chat_with_user_udp(addr, server_socket):
     sd.wait()
     processed_content = ""
     sentence_end_pattern = re.compile(r'(?<=[.?!])\s')
-    transcript_buffer = ""
-    
-    try:
-        while True:
+   
+    while True:
+        audio_chunk, addr = server_socket.recvfrom(4096)  # buffer size is 4096 bytes
+        print(f"Received message from {addr}")
+
+        transcriber = Transcriber()  # Create a new Transcriber instance for each transcription cycle
+        transcription_task = asyncio.create_task(transcriber.run(DEEPGRAM_API_KEY))
+        await transcriber.audio_queue.put(audio_chunk)  # Put the received audio chunk into the transcriber's queue
+
+        # Now wait for the transcription to complete
+        transcript = await transcription_task
+        if transcript.lower() == "exit":
+            print(f"Exiting as requested by the client {addr}")
+            break
+        query = transcript
+
+        messages.append({"role": "user", "content": query})
         
-            audio_chunk, addr = server_socket.recvfrom(4096)  # buffer size is 4096 bytes
-            # audio_chunk, addr = server_socket.recvfrom(BUFFER_SIZE)  # buffer size is 4096 bytes
-            transcript = await transcribe_socket_udp(server_socket)
-            if transcript:
-                print("Final Transcript:", transcript)
-                query=transcript
-                if query.lower() == "exit":
-                    break
+        start_time = datetime.datetime.now()
+        print('Before gpt: ', start_time)
+        
+        # Chat completion with streaming
+        response_stream = openai.ChatCompletion.create(
+            model=model_name,
+            messages=messages,
+            api_base="https://api.perplexity.ai",
+            api_key=PPLX_API_KEY,
+            stream=True,
+        )
 
-                messages.append({"role": "user", "content": query})
-                
-                start_time = datetime.datetime.now()
-                print('Before gpt: ', start_time)
-                
-                # Chat completion with streaming
-                response_stream = openai.ChatCompletion.create(
-                    model=model_name,
-                    messages=messages,
-                    api_base="https://api.perplexity.ai",
-                    api_key=PPLX_API_KEY,
-                    stream=True,
-                )
+        for response in response_stream:
+            if 'choices' in response:
+                content = response['choices'][0]['message']['content']
+                new_content = content.replace(processed_content, "", 1).strip()  # Remove already processed content
+                elapsed_time = (datetime.datetime.now() - start_time).total_seconds()
+                print('gpt answer received: ', datetime.datetime.now())
+                print(new_content)
 
-                for response in response_stream:
-                    if 'choices' in response:
-                        content = response['choices'][0]['message']['content']
-                        new_content = content.replace(processed_content, "", 1).strip()  # Remove already processed content
-                        elapsed_time = (datetime.datetime.now() - start_time).total_seconds()
-                        print('gpt answer received: ', datetime.datetime.now())
-                        print(new_content)
+                # Split the content by sentence-ending punctuations
+                parts = sentence_end_pattern.split(new_content)
 
-                        # Split the content by sentence-ending punctuations
-                        parts = sentence_end_pattern.split(new_content)
+                # Process each part that ends with a sentence-ending punctuation
+                for part in parts[:-1]:  # Exclude the last part for now
+                    part = part.strip()
+                    if part:
+                        handle_gpt_response(part + '.')  # Re-add the punctuation for processing
+                        processed_content += part + ' '  # Add the processed part to processed_content
 
-                        # Process each part that ends with a sentence-ending punctuation
-                        for part in parts[:-1]:  # Exclude the last part for now
-                            part = part.strip()
-                            if part:
-                                handle_gpt_response(part + '.')  # Re-add the punctuation for processing
-                                processed_content += part + ' '  # Add the processed part to processed_content
+                # Now handle the last part separately
+                last_part = parts[-1].strip()
+                if last_part:
+                    # If the last part ends with a punctuation, process it directly
+                    if sentence_end_pattern.search(last_part):
+                        handle_gpt_response(last_part)
+                        processed_content += last_part + ' '
+                    else:
+                        # Otherwise, add it to the sentence buffer to process it later
+                        processed_content += last_part + ' '
+    
+        # Append only the complete assistant's response to messages
+        if content.strip():
+            messages.append({"role": "assistant", "content": content.strip()})
 
-                        # Now handle the last part separately
-                        last_part = parts[-1].strip()
-                        if last_part:
-                            # If the last part ends with a punctuation, process it directly
-                            if sentence_end_pattern.search(last_part):
-                                handle_gpt_response(last_part)
-                                processed_content += last_part + ' '
-                            else:
-                                # Otherwise, add it to the sentence buffer to process it later
-                                processed_content += last_part + ' '
-
-                # Append only the complete assistant's response to messages
-                if content.strip():
-                    messages.append({"role": "assistant", "content": content.strip()})
-
-
-    except Exception as e:
-        print(f"An error occurred: {e}")
-    finally:
-        # data.close()
-        print(f"Disconnected {addr}")
 
 async def server_program_udp():
     host = '127.0.0.1'  # Use your host
