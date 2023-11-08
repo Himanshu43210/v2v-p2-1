@@ -1,0 +1,10 @@
+websockets
+pyaudio
+numpy
+faiss
+scikit-learn
+sounddevice
+soundfile
+wavio
+python-dotenv
+openai
