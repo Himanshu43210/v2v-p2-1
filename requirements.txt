@@ -1,7 +1,7 @@
 websockets
 pyaudio
 numpy
-faiss
+faiss-cpu
 scikit-learn
 sounddevice
 soundfile
