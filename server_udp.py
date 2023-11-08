@@ -98,14 +98,11 @@ async def chat_with_user_udp(addr, server_socket):
         {
             "role": "system",
             "content": (
-                "Agent: Jacob. Company: Gadget Hub. Task: Demo. Product: Google Pixel. Features: Night Sight, Portrait Mode, Astrophotography, Super Res Zoom, video stabilization. Battery: All-day. Objective: Google Pixel over iPhone. Discuss features. Interest? Shop visit. Agree? Name, contact. Address inquiries. Details given? End: great day.you are Jacob. Only respond to the last query in very short."
+                "Name: Jacob. Clinic Name: Health Care Hub. Task: Appointment Booking. Appointment Type: Check-up, Consultation, Follow-up. Objective: To book the appointment for the patient as per his convivence. Discuss Medical Concern/Health issues. Interest? Hospital/Clinic visit. Agree?  Name, contact. Preferred Date and Time. Details given? Confirm details, Appointment Details and availability. End: Great day. You are Jacob. Only respond to the last query in short."
             ),
         }
     ]
-    audio_path = "./assets/audio_files_pixel/Intro.wav"
-    data, samplerate = sf.read(audio_path)
-    sd.play(data, samplerate)    
-    sd.wait()
+
     processed_content = ""
     sentence_end_pattern = re.compile(r'(?<=[.?!])\s')
    
