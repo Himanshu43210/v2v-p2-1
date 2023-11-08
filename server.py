@@ -34,9 +34,8 @@ model_name="llama-2-70b-chat"
 sys.path.append("./components")
 sys.path.append("./constants")
 # import speech_to_text
-from speech_to_text import transcribe_socket
 from dictionary import phrases_dict
-from speech_to_text_og import Transcriber
+from speech_to_text import Transcriber
 
 def generate_unique_id():
     return str(uuid.uuid4())
@@ -180,10 +179,8 @@ async def server_program_udp():
 
     while True:
         try:
-            # Since UDP is connectionless, we don't accept connections
-            # We directly receive data from any address
+            # Since UDP is connectionless, we don't accept connections. We directly receive data from any address
             data, addr = server_socket.recvfrom(4096)  # buffer size is 4096 bytes
-            # data, addr = server_socket.recvfrom(BUFFER_SIZE)  # buffer size is 4096 bytes
             print(f"Received message from {addr}")
             await chat_with_user_udp(addr, server_socket)
         except Exception as e:
