@@ -1,21 +1,14 @@
 #### UDP
 import socket
 import asyncio
-import websockets
-import json
 import socket
-import pyaudio
 import os
-import json
 import uuid
 import datetime
 import numpy as np
 import faiss
 import sys
 from sklearn.feature_extraction.text import TfidfVectorizer
-import sounddevice as sd
-import soundfile as sf
-import wavio
 import re
 from dotenv import load_dotenv
 import asyncio
@@ -41,12 +34,24 @@ def generate_unique_id():
     return str(uuid.uuid4())
 
 conversation_id = generate_unique_id()
+
+processed_sentences = set()
+
 # 1. FAISS Indexing
 # Convert phrases to embeddings for searching
 vectorizer = TfidfVectorizer().fit(phrases_dict.keys())
 phrases_embeddings = vectorizer.transform(phrases_dict.keys())
 index = faiss.IndexIDMap(faiss.IndexFlatIP(phrases_embeddings.shape[1]))
 index.add_with_ids(np.array(phrases_embeddings.toarray(), dtype=np.float32), np.array(list(range(len(phrases_dict)))))
+
+def send_audio_file_udp(file_path, client_address, server_socket):
+    # Read the audio file in chunks
+    with open(file_path, "rb") as f:
+        while True:
+            audio_data = f.read(1024)  # Read 1024 bytes of the file
+            if not audio_data:
+                break  # If file has ended, stop sending
+            server_socket.sendto(audio_data, client_address)  # Send the audio chunk to the client
 
 def find_matching_audio(sentence):
     start_time_f = datetime.datetime.now()
@@ -68,9 +73,7 @@ def find_matching_audio(sentence):
         return phrases_dict[matching_sentence]
     return None
 
-processed_sentences = set()
-
-def handle_gpt_response(full_content):
+def handle_gpt_response(full_content, addr, server_socket):
     # Split content into sentences
     sentences = re.split(r'[.!?]', full_content)
     # print(f'Sentence split: {datetime.datetime.now()}')
@@ -82,14 +85,11 @@ def handle_gpt_response(full_content):
             audio_code = find_matching_audio(sentence)
             if audio_code:
                 audio_path = f"./assets/audio_files_pixel/{audio_code}.wav"
-                print('Before Audio: ', datetime.datetime.now())
-                wav_obj = wavio.read(audio_path)
-                sd.play(wav_obj.data, samplerate=wav_obj.rate)
-                print('Audio playing started: ', datetime.datetime.now())
-                sd.wait()
+                print('Sending Audio to client: ', datetime.datetime.now())
+                send_audio_file_udp(audio_path, addr, server_socket)
             # Mark sentence as processed
             processed_sentences.add(sentence)
-
+ 
 
 async def chat_with_user_udp(addr, server_socket):
     print(f"Connected by {addr}")
@@ -97,7 +97,7 @@ async def chat_with_user_udp(addr, server_socket):
         {
             "role": "system",
             "content": (
-                "Name: Jacob. Clinic Name: Health Care Hub. Task: Appointment Booking. Appointment Type: Check-up, Consultation, Follow-up. Objective: To book the appointment for the patient as per his convivence. Discuss Medical Concern/Health issues. Interest? Hospital/Clinic visit. Agree?  Name, contact. Preferred Date and Time. Details given? Confirm details, Appointment Details and availability. End: Great day. You are Jacob. Only respond to the last query in short."
+                "Name: Jacob. Hospital Name: Health Care Hospital. Task: Appointment Booking. Appointment Type: Check-up, Consultation, Follow-up. Objective: First ask for name and contact number and then book the appointment for the patient as per his convenience. Discuss Medical Concern/Health issues and any other issues. Hospital/Clinic visit. Agree?  Preferred Date and Time. Details given? Confirm detail: Appointment Details and availability. End: Great day. You are Jacob. Only respond to the last query in short."
             ),
         }
     ]
@@ -106,6 +106,7 @@ async def chat_with_user_udp(addr, server_socket):
     sentence_end_pattern = re.compile(r'(?<=[.?!])\s')
    
     while True:
+        server_socket.sendto(b'END_OF_FILE', addr)
         audio_chunk, addr = server_socket.recvfrom(4096)  # buffer size is 4096 bytes
         print(f"Received message from {addr}")
 
@@ -119,6 +120,8 @@ async def chat_with_user_udp(addr, server_socket):
             print(f"Exiting as requested by the client {addr}")
             break
         query = transcript
+        server_socket.sendto(b'transcription done', addr)
+        print(f"Sent 'transcription done' message to {addr}")
 
         messages.append({"role": "user", "content": query})
         
@@ -149,7 +152,7 @@ async def chat_with_user_udp(addr, server_socket):
                 for part in parts[:-1]:  # Exclude the last part for now
                     part = part.strip()
                     if part:
-                        handle_gpt_response(part + '.')  # Re-add the punctuation for processing
+                        handle_gpt_response(part + '.', addr, server_socket)  # Re-add the punctuation for processing
                         processed_content += part + ' '  # Add the processed part to processed_content
 
                 # Now handle the last part separately
@@ -157,7 +160,7 @@ async def chat_with_user_udp(addr, server_socket):
                 if last_part:
                     # If the last part ends with a punctuation, process it directly
                     if sentence_end_pattern.search(last_part):
-                        handle_gpt_response(last_part)
+                        handle_gpt_response(last_part, addr, server_socket)
                         processed_content += last_part + ' '
                     else:
                         # Otherwise, add it to the sentence buffer to process it later
@@ -166,8 +169,7 @@ async def chat_with_user_udp(addr, server_socket):
         # Append only the complete assistant's response to messages
         if content.strip():
             messages.append({"role": "assistant", "content": content.strip()})
-
-
+        
 async def server_program_udp():
     host = '127.0.0.1'  # Use your host
     port = 65432  # Use your port
