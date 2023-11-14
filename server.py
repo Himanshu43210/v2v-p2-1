@@ -171,7 +171,7 @@ async def chat_with_user_udp(addr, server_socket):
             messages.append({"role": "assistant", "content": content.strip()})
         
 async def server_program_udp():
-    host = '127.0.0.1'  # Use your host
+    host = '0.0.0.0'  # Use your host
     port = 65432  # Use your port
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # Notice SOCK_DGRAM for UDP
