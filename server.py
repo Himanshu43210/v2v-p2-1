@@ -183,6 +183,8 @@ async def server_program_udp():
         try:
             # Since UDP is connectionless, we don't accept connections. We directly receive data from any address
             data, addr = server_socket.recvfrom(4096)  # buffer size is 4096 bytes
+            if data:
+                print(f"Received data from {addr}, connection successful.")
             print(f"Received message from {addr}")
             await chat_with_user_udp(addr, server_socket)
         except Exception as e:
