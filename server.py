@@ -20,9 +20,9 @@ load_dotenv()
 # Access environment variables
 PPLX_API_KEY = os.environ.get("PPLX_API_KEY")
 os.environ["PPLX_API_KEY"] = PPLX_API_KEY
-DEEPGRAM_API_KEY = os.getenv('DEEPGRAM_API_KEY')
+DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 
-model_name="llama-2-70b-chat"
+model_name = "llama-2-70b-chat"
 
 sys.path.append("./components")
 sys.path.append("./constants")
@@ -30,8 +30,10 @@ sys.path.append("./constants")
 from dictionary import phrases_dict
 from speech_to_text import Transcriber
 
+
 def generate_unique_id():
     return str(uuid.uuid4())
+
 
 conversation_id = generate_unique_id()
 
@@ -42,7 +44,11 @@ processed_sentences = set()
 vectorizer = TfidfVectorizer().fit(phrases_dict.keys())
 phrases_embeddings = vectorizer.transform(phrases_dict.keys())
 index = faiss.IndexIDMap(faiss.IndexFlatIP(phrases_embeddings.shape[1]))
-index.add_with_ids(np.array(phrases_embeddings.toarray(), dtype=np.float32), np.array(list(range(len(phrases_dict)))))
+index.add_with_ids(
+    np.array(phrases_embeddings.toarray(), dtype=np.float32),
+    np.array(list(range(len(phrases_dict)))),
+)
+
 
 def send_audio_file_udp(file_path, client_address, server_socket):
     # Read the audio file in chunks
@@ -51,11 +57,14 @@ def send_audio_file_udp(file_path, client_address, server_socket):
             audio_data = f.read(1024)  # Read 1024 bytes of the file
             if not audio_data:
                 break  # If file has ended, stop sending
-            server_socket.sendto(audio_data, client_address)  # Send the audio chunk to the client
+            server_socket.sendto(
+                audio_data, client_address
+            )  # Send the audio chunk to the client
+
 
 def find_matching_audio(sentence):
     start_time_f = datetime.datetime.now()
-    print(f'Phrase given to faiss {start_time_f}')
+    print(f"Phrase given to faiss {start_time_f}")
     # Convert the sentence to embedding and search in the index
     sentence_embedding = vectorizer.transform([sentence]).toarray().astype(np.float32)
     D, I = index.search(sentence_embedding, 1)
@@ -63,19 +72,20 @@ def find_matching_audio(sentence):
     matching_sentence = list(phrases_dict.keys())[match_index]
 
     end_time_f = datetime.datetime.now()
-    print('Faiss answer fetched: ', end_time_f)
+    print("Faiss answer fetched: ", end_time_f)
     elapsed_time_f = (end_time_f - start_time_f).total_seconds()
 
     # # Print the elapsed time
     print(f"Time taken by Faiss to fetch similar answer: {elapsed_time_f:.6f} seconds")
-    
+
     if D[0][0] > 0.1:  # You can adjust this threshold based on desired accuracy
         return phrases_dict[matching_sentence]
     return None
 
+
 def handle_gpt_response(full_content, addr, server_socket):
     # Split content into sentences
-    sentences = re.split(r'[.!?]', full_content)
+    sentences = re.split(r"[.!?]", full_content)
     # print(f'Sentence split: {datetime.datetime.now()}')
     sentences = [s.strip() for s in sentences if s]
 
@@ -85,11 +95,11 @@ def handle_gpt_response(full_content, addr, server_socket):
             audio_code = find_matching_audio(sentence)
             if audio_code:
                 audio_path = f"./assets/audio_files_pixel/{audio_code}.wav"
-                print('Sending Audio to client: ', datetime.datetime.now())
+                print("Sending Audio to client: ", datetime.datetime.now())
                 send_audio_file_udp(audio_path, addr, server_socket)
             # Mark sentence as processed
             processed_sentences.add(sentence)
- 
+
 
 async def chat_with_user_udp(addr, server_socket):
     print(f"Connected by {addr}")
@@ -103,16 +113,20 @@ async def chat_with_user_udp(addr, server_socket):
     ]
 
     processed_content = ""
-    sentence_end_pattern = re.compile(r'(?<=[.?!])\s')
-   
+    sentence_end_pattern = re.compile(r"(?<=[.?!])\s")
+
     while True:
-        server_socket.sendto(b'END_OF_FILE', addr)
+        server_socket.sendto(b"END_OF_FILE", addr)
         audio_chunk, addr = server_socket.recvfrom(4096)  # buffer size is 4096 bytes
         print(f"Received message from {addr}")
 
-        transcriber = Transcriber()  # Create a new Transcriber instance for each transcription cycle
+        transcriber = (
+            Transcriber()
+        )  # Create a new Transcriber instance for each transcription cycle
         transcription_task = asyncio.create_task(transcriber.run(DEEPGRAM_API_KEY))
-        await transcriber.audio_queue.put(audio_chunk)  # Put the received audio chunk into the transcriber's queue
+        await transcriber.audio_queue.put(
+            audio_chunk
+        )  # Put the received audio chunk into the transcriber's queue
 
         # Now wait for the transcription to complete
         transcript = await transcription_task
@@ -120,14 +134,14 @@ async def chat_with_user_udp(addr, server_socket):
             print(f"Exiting as requested by the client {addr}")
             break
         query = transcript
-        server_socket.sendto(b'transcription done', addr)
+        server_socket.sendto(b"transcription done", addr)
         print(f"Sent 'transcription done' message to {addr}")
 
         messages.append({"role": "user", "content": query})
-        
+
         start_time = datetime.datetime.now()
-        print('Before gpt: ', start_time)
-        
+        print("Before gpt: ", start_time)
+
         # Chat completion with streaming
         response_stream = openai.ChatCompletion.create(
             model=model_name,
@@ -138,11 +152,13 @@ async def chat_with_user_udp(addr, server_socket):
         )
 
         for response in response_stream:
-            if 'choices' in response:
-                content = response['choices'][0]['message']['content']
-                new_content = content.replace(processed_content, "", 1).strip()  # Remove already processed content
+            if "choices" in response:
+                content = response["choices"][0]["message"]["content"]
+                new_content = content.replace(
+                    processed_content, "", 1
+                ).strip()  # Remove already processed content
                 elapsed_time = (datetime.datetime.now() - start_time).total_seconds()
-                print('gpt answer received: ', datetime.datetime.now())
+                print("gpt answer received: ", datetime.datetime.now())
                 print(new_content)
 
                 # Split the content by sentence-ending punctuations
@@ -152,8 +168,12 @@ async def chat_with_user_udp(addr, server_socket):
                 for part in parts[:-1]:  # Exclude the last part for now
                     part = part.strip()
                     if part:
-                        handle_gpt_response(part + '.', addr, server_socket)  # Re-add the punctuation for processing
-                        processed_content += part + ' '  # Add the processed part to processed_content
+                        handle_gpt_response(
+                            part + ".", addr, server_socket
+                        )  # Re-add the punctuation for processing
+                        processed_content += (
+                            part + " "
+                        )  # Add the processed part to processed_content
 
                 # Now handle the last part separately
                 last_part = parts[-1].strip()
@@ -161,21 +181,24 @@ async def chat_with_user_udp(addr, server_socket):
                     # If the last part ends with a punctuation, process it directly
                     if sentence_end_pattern.search(last_part):
                         handle_gpt_response(last_part, addr, server_socket)
-                        processed_content += last_part + ' '
+                        processed_content += last_part + " "
                     else:
                         # Otherwise, add it to the sentence buffer to process it later
-                        processed_content += last_part + ' '
-    
+                        processed_content += last_part + " "
+
         # Append only the complete assistant's response to messages
         if content.strip():
             messages.append({"role": "assistant", "content": content.strip()})
-        
-async def server_program_udp():
-    #host = '0.0.0.0'  
-    host = '127.0.0.1'
-    port = 65432 
 
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # Notice SOCK_DGRAM for UDP
+
+async def server_program_udp():
+    host = "0.0.0.0"
+    # host = '127.0.0.1'
+    port = 65432
+
+    server_socket = socket.socket(
+        socket.AF_INET, socket.SOCK_DGRAM
+    )  # Notice SOCK_DGRAM for UDP
     server_socket.bind((host, port))
 
     print(f"Server listening on {host}:{port} (UDP)")
@@ -191,6 +214,7 @@ async def server_program_udp():
         except Exception as e:
             print(f"An error occurred: {e}")
 
+
 # Modify the entry point to run the async server program
-if __name__ == '__main__':
+if __name__ == "__main__":
     asyncio.run(server_program_udp())
