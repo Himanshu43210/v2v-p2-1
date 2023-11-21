@@ -4,4 +4,4 @@ faiss-cpu
 scikit-learn
 python-dotenv
 openai
-websocketscls
+websockets
