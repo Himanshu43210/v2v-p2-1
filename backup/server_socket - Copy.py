@@ -44,6 +44,16 @@ index.add_with_ids(
     np.array(list(range(len(phrases_dict)))),
 )
 
+# def find_matching_audio(sentence):
+#     # Convert the sentence to embedding and search in the index
+#     sentence_embedding = vectorizer.transform([sentence]).toarray().astype(np.float32)
+#     D, I = index.search(sentence_embedding, 1)
+#     match_index = I[0][0]
+#     matching_sentence = list(phrases_dict.keys())[match_index]
+#     audio_code = phrases_dict[matching_sentence]  # Assuming phrases_dict maps sentences to audio file codes
+#     audio_path = f"./assets/audio_files_pixel/{audio_code}.wav"
+#     return audio_path
+
 def find_matching_audio(sentence):
     start_time_f = datetime.datetime.now()
     print(f'Phrase given to faiss {start_time_f}')
@@ -83,6 +93,17 @@ async def send_audio_file_websocket(file_path, websocket):
         logging.error(f"Audio file not found: {file_path}")
     except Exception as e:
         logging.error(f"Error sending audio file: {e}")
+
+# async def handle_gpt_response(full_content, websocket, processed_sentences):
+#     sentences = re.split(r"[.!?]", full_content)
+#     sentences = [s.strip() for s in sentences if s]
+
+#     for sentence in sentences:
+#         if sentence not in processed_sentences:
+#             audio_path = find_matching_audio(sentence)
+#             if audio_path:
+#                 await send_audio_file_websocket(audio_path, websocket)
+#             processed_sentences.add(sentence)
 
 async def handle_gpt_response(full_content, websocket, processed_sentences):
     sentences = re.split(r"[.!?]", full_content)
@@ -155,6 +176,8 @@ async def chat_with_user_websocket(websocket, path):
                         for part in parts[:-1]:  # Exclude the last part for now
                             part = part.strip()
                             if part:
+                                # await handle_gpt_response(new_content, websocket, processed_sentences)
+                                # processed_content += new_content + " "
                                 await handle_gpt_response(part + '.', websocket, processed_sentences)
                                 processed_content += part + ' '
                         

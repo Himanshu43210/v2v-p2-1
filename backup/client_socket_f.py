@@ -10,6 +10,9 @@ CHANNELS = 1
 RATE = 24000
 CHUNK_SIZE = 1024
 WEBSOCKET_URL = "ws://127.0.0.1:65432"
+# WEBSOCKET_URL = "ws://socket.itsolutionshub.com/"
+# WEBSOCKET_URL = "wss://socket.itsolutionshub.com/"  # If the server supports SSL/TLS
+# WEBSOCKET_URL = "https://socket.itsolutionshub.com/"
 
 audio = pyaudio.PyAudio()
 
@@ -33,6 +36,7 @@ def send_audio_chunks(stream, websocket, loop):
         except Exception as e:
             print(f"Error sending audio chunk: {e}")
             break
+
 
 def play_audio(audio, playback_stream, audio_queue):
     while True:
