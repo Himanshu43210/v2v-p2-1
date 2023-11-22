@@ -12,6 +12,13 @@
 # CHUNK_SIZE = 1024
 # WEBSOCKET_URL = "ws://127.0.0.1:65432"
 
+# WEBSOCKET_URL = "https://socket.itsolutionshub.com:65432"
+# WEBSOCKET_URL = "wss://socket.itsolutionshub.com:65432"
+# WEBSOCKET_URL = "ws://socket.itsolutionshub.com/ws"
+# WEBSOCKET_URL = "wss://socket.itsolutionshub.com/ws"
+# WEBSOCKET_URL = "ws://ritsolutionshub.com/ws"
+# WEBSOCKET_URL = "ws://localhost:65432"
+
 # audio = pyaudio.PyAudio()
 
 

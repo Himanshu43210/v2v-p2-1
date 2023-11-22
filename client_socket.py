@@ -9,7 +9,11 @@ FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 24000
 CHUNK_SIZE = 1024
-WEBSOCKET_URL = "ws://127.0.0.1:65432"
+WEBSOCKET_URL = "ws://127.0.0.1:65432"         # Local
+# WEBSOCKET_URL = "ws://139.59.2.254:65432"    # Digital ocean
+# WEBSOCKET_URL = "ws://45.91.169.219:65432"     # Kamatera
+
+
 
 audio = pyaudio.PyAudio()
 
