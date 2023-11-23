@@ -26,7 +26,7 @@ model_name = "llama-2-70b-chat"
 sys.path.append("./components")
 sys.path.append("./constants")
 from dictionary import phrases_dict
-from speech_to_text import Transcriber
+# from speech_to_text import Transcriber
 
 
 def generate_unique_id():
