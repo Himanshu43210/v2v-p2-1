@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Speech Transcription</title>
+    <script>
+        async function startTranscription() {
+            document.getElementById('transcribeButton').disabled = true;
+            document.getElementById('transcribeButton').innerText = 'Transcribing...';
+            await fetch('/start_transcription', { method: 'POST' });
+            document.getElementById('transcribeButton').innerText = 'Stop Transcription';
+            document.getElementById('transcribeButton').disabled = false;
+        }
+    </script>
+</head>
+<body>
+    <button id="transcribeButton" onclick="startTranscription()">Start Transcription</button>
+</body>
+</html>

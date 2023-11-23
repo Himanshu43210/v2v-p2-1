@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Audio Recorder</title>
+    <script>
+        let mediaRecorder;
+        let socket;
+
+        async function startRecording() {
+            socket = new WebSocket("ws://localhost:8765");
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+            mediaRecorder.ondataavailable = event => {
+                if (socket.readyState === WebSocket.OPEN) {
+                    socket.send(event.data);
+                }
+            };
+            mediaRecorder.onstop = () => {
+                socket.close();
+            };
+            mediaRecorder.start(1000); // Send data every 1000ms (1 second)
+        }
+
+        function stopRecording() {
+            mediaRecorder.stop();
+        }
+
+        function toggleRecording(button) {
+            if (button.textContent === 'Start Recording') {
+                startRecording();
+                button.textContent = 'Stop Recording';
+                button.style.backgroundColor = 'red';
+            } else {
+                stopRecording();
+                button.textContent = 'Start Recording';
+                button.style.backgroundColor = 'green';
+            }
+        }
+    </script>
+</head>
+<body>
+    <button onclick="toggleRecording(this)" style="background-color: green;">Start Recording</button>
+</body>
+</html>
