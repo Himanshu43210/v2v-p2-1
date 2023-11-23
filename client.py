@@ -1,3 +1,12 @@
+from flask import Flask, render_template, request
+import asyncio
+import threading
+import websockets
+import json
+import os
+
+app = Flask(__name__)
+
 import asyncio
 import websockets
 import pyaudio
@@ -17,7 +26,8 @@ load_dotenv()
 # Access environment variables
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 # WEBSOCKET_URL = "ws://127.0.0.1:65432"  # Update this to your server's WebSocket URL
-WEBSOCKET_URL = "ws://139.59.2.254:65432"  
+
+WEBSOCKET_URL = "ws://139.59.2.254:65432" 
 
 FORMAT = pyaudio.paInt16  # Linear16 encoding
 CHANNELS = 1  # Mono audio
@@ -120,5 +130,21 @@ async def main():
             print(f"An error occurred: {e}")
             break
 
-if __name__ == "__main__":
+# if __name__ == "__main__":
+#     asyncio.run(main())
+
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+def start_transcription():
     asyncio.run(main())
+
+@app.route('/start_transcription', methods=['POST'])
+def handle_start_transcription():
+    threading.Thread(target=start_transcription, daemon=True).start()
+    return ('', 204)
+
+if __name__ == "__main__":
+    app.run(debug=True)
