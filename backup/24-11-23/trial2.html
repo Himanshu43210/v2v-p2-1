@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Transcription Control</title>
+    <style>
+        #transcribeButton {
+            background-color: green;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #transcribeButton.recording {
+            background-color: red;
+        }
+    </style>
+</head>
+<body>
+    <button id="transcribeButton">Start Transcription</button>
+    <div id="transcriptionResult"></div>
+    <script>
+        const transcribeButton = document.getElementById('transcribeButton');
+        const transcriptionResult = document.getElementById('transcriptionResult');
+        let isRecording = false;
+        let audioContext, microphoneStream, webSocket;
+
+        transcribeButton.addEventListener('click', async () => {
+            isRecording = !isRecording;
+            updateButton();
+
+            if (isRecording) {
+                await startRecording();
+            } else {
+                stopRecording();
+            }
+        });
+
+        async function startRecording() {
+            if (!navigator.mediaDevices) {
+                alert("Your browser does not support media devices.");
+                return;
+            }
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioContext = new AudioContext();
+                microphoneStream = audioContext.createMediaStreamSource(stream);
+
+                // Initialize WebSocket connection to your server
+                webSocket = new WebSocket('wss://yourserver.com/transcribe');
+                webSocket.onmessage = (event) => {
+                    // Handle transcription result here
+                    transcriptionResult.textContent = event.data;
+                };
+
+                // More code here to handle the audio stream and send it to your server
+                // ...
+
+            } catch (err) {
+                console.error('Error accessing the microphone', err);
+            }
+        }
+
+        function stopRecording() {
+            if (microphoneStream) {
+                microphoneStream.disconnect();
+                microphoneStream = null;
+            }
+            if (audioContext) {
+                audioContext.close();
+                audioContext = null;
+            }
+            if (webSocket) {
+                webSocket.close();
+                webSocket = null;
+            }
+            transcriptionResult.textContent = 'Transcription stopped.';
+        }
+
+        function updateButton() {
+            if (isRecording) {
+                transcribeButton.classList.add('recording');
+                transcribeButton.textContent = 'Stop Transcription';
+            } else {
+                transcribeButton.classList.remove('recording');
+                transcribeButton.textContent = 'Start Transcription';
+            }
+        }
+    </script>
+</body>
+</html>
