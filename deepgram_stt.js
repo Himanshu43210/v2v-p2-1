@@ -86,7 +86,7 @@ class Transcriber {
         });
     }
 }
-// DEEPGRAM_API_KEY="967c5ce3f89d5cbb8c74107737ba36b9e1a5ba20"
+
 function transcribeStream() {
     const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
     if (!deepgramApiKey) {
