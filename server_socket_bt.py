@@ -121,76 +121,109 @@ async def chat_with_user_websocket(websocket, path):
 
     while True:
         try:
-            async for message in websocket:
-                data = json.loads(message)
+            # async for message in websocket:
+            #     # if isinstance(message, bytes):
+            #     #     # Directly handle binary audio data
+            #     #     await transcriber.add_audio_chunk(message)
+            #     # else:
+            #     #     # Process text-based messages as before
+            #     #     data = json.loads(message)
+            #     # data = json.loads(message)
+            #     if isinstance(message, bytes):
+            #         # Directly handle binary audio data
+            #         await transcriber.add_audio_chunk(message)
+            #     else:
+            #         # Process text-based messages
+            #         data = json.loads(message)
 
-                if "audio" in data:
-                    # Handle audio data
-                    audio_chunk = data["audio"]
-                    # Add the audio chunk to the transcriber's queue
-                    await transcriber.add_audio_chunk(audio_chunk)
-                    transcript = await transcription_task
-                    print("Transcription:", transcript)
-                    if transcript.lower() == "exit":
-                        print("Exiting as requested by the client")
-                        break
-                    query = transcript
-                    print(query)
-                    await websocket.send(json.dumps({"status": "transcription done"}))
-                    messages.append({"role": "user", "content": query})
+            #         if "audio" in data:
+            #             # Handle text-based audio data (if needed)
+            #             audio_chunk = data["audio"]
+            #             # Add the audio chunk to the transcriber's queue
+            #             await transcriber.add_audio_chunk(audio_chunk)
 
-                    # Chat completion with GPT-3
-                    start_time = datetime.datetime.now()
-                    print("Before GPT: ", start_time)
+            #         # Additional text-based message handling (if needed)
+            #         # ...
+            #     # if "audio" in data:
+            #     #     # Handle audio data
+            #     #     audio_chunk = data["audio"]
+            #     #     # Add the audio chunk to the transcriber's queue
+            #     #     await transcriber.add_audio_chunk(audio_chunk)
+            #     transcript = await transcription_task
+         
+            message = await websocket.recv()
+            if isinstance(message, bytes):
+                # Directly handle binary audio data
+                await transcriber.add_audio_chunk(message)
+            else:
+                print("Non-audio message received:", message)
 
-                    response_stream = openai.ChatCompletion.create(
-                        model=model_name,
-                        messages=messages,
-                        api_base="https://api.perplexity.ai",
-                        api_key=PPLX_API_KEY,
-                        stream=True,
-                    )
+            if message == b"END_OF_FILE":
+                print("End of audio file received, starting transcription.")
+                transcript = await transcriber.run(DEEPGRAM_API_KEY)
+                print("Transcription:", transcript)
+                # break
+                # print("Transcription:", transcript)
+                if transcript.lower() == "exit":
+                    print("Exiting as requested by the client")
+                    break
+                query = transcript
+                print(query)
+                await websocket.send(json.dumps({"status": "transcription done"}))
+                messages.append({"role": "user", "content": query})
 
-                    for response in response_stream:
-                        if "choices" in response:
-                            content = response["choices"][0]["message"]["content"]
-                            new_content = content.replace(processed_content, "", 1).strip()
-                            elapsed_time = (datetime.datetime.now() - start_time).total_seconds()
-                            print("GPT-3 answer received: ", datetime.datetime.now())
-                            # print(new_content)
+                # Chat completion with GPT-3
+                start_time = datetime.datetime.now()
+                print("Before GPT: ", start_time)
 
-                            parts = sentence_end_pattern.split(new_content)
+                response_stream = openai.ChatCompletion.create(
+                    model=model_name,
+                    messages=messages,
+                    api_base="https://api.perplexity.ai",
+                    api_key=PPLX_API_KEY,
+                    stream=True,
+                )
 
-                            # Process and send back the response
-                            for part in parts[:-1]:  # Exclude the last part for now
-                                part = part.strip()
-                                if part:
-                                    await handle_gpt_response(part + '.', websocket, processed_sentences)
-                                    processed_content += part + ' '
-                            
-                            last_part = parts[-1].strip()
-                            if last_part:
-                                # If the last part ends with a punctuation, process it directly
-                                if sentence_end_pattern.search(last_part):
-                                    await handle_gpt_response(last_part, websocket, processed_sentences)
-                                    processed_content += last_part + " "
-                                else:
-                                    processed_content += last_part + ' '
+                for response in response_stream:
+                    if "choices" in response:
+                        content = response["choices"][0]["message"]["content"]
+                        new_content = content.replace(processed_content, "", 1).strip()
+                        elapsed_time = (datetime.datetime.now() - start_time).total_seconds()
+                        print("GPT-3 answer received: ", datetime.datetime.now())
+                        # print(new_content)
 
-                            if content.strip():
-                                messages.append({"role": "assistant", "content": content.strip()})
-                                print("After GPT: ", datetime.datetime.now())
-                                print("Elapsed time: ", elapsed_time)
-                                print("Total time: ", (datetime.datetime.now() - start_time).total_seconds())
-                                print("Total time: ", (datetime.datetime.now() - start_time).total_seconds() - elapsed_time)
-                                print("Total time: ", (datetime.datetime.now() - start_time).total_seconds() - elapsed_time)
-                    if last_part:
-                        print(f"Processed part sent to FAISS: '{last_part}'")
-                        await handle_gpt_response(last_part, websocket, processed_sentences)
-                        processed_content += last_part + ' '
+                        parts = sentence_end_pattern.split(new_content)
 
-                    if content.strip():
-                        messages.append({"role": "assistant", "content": content.strip()})
+                        # Process and send back the response
+                        for part in parts[:-1]:  # Exclude the last part for now
+                            part = part.strip()
+                            if part:
+                                await handle_gpt_response(part + '.', websocket, processed_sentences)
+                                processed_content += part + ' '
+                        
+                        last_part = parts[-1].strip()
+                        if last_part:
+                            # If the last part ends with a punctuation, process it directly
+                            if sentence_end_pattern.search(last_part):
+                                await handle_gpt_response(last_part, websocket, processed_sentences)
+                                processed_content += last_part + " "
+                            else:
+                                processed_content += last_part + ' '
+
+                        if content.strip():
+                            messages.append({"role": "assistant", "content": content.strip()})
+                            print("After GPT: ", datetime.datetime.now())
+                            print("Elapsed time: ", elapsed_time)
+                            print("Total time: ", (datetime.datetime.now() - start_time).total_seconds())
+                            print("Total time: ", (datetime.datetime.now() - start_time).total_seconds() - elapsed_time)
+                            print("Total time: ", (datetime.datetime.now() - start_time).total_seconds() - elapsed_time)
+                if last_part:
+                    print(f"Processed part sent to FAISS: '{last_part}'")
+                    await handle_gpt_response(last_part, websocket, processed_sentences)
+                    processed_content += last_part + ' '
+
+                if content.strip():
+                    messages.append({"role": "assistant", "content": content.strip()})
 
         except websockets.exceptions.ConnectionClosed as e:
             print(f"WebSocket connection closed: {e.code} - {e.reason}")
@@ -200,7 +233,7 @@ async def chat_with_user_websocket(websocket, path):
             if not websocket.closed:
                 print("Closing the WebSocket connection properly.")
                 await websocket.close()
-            print("WebSocket connection closed properly.")
+            # print("WebSocket connection closed properly.")
 
 
 async def server_program_websocket():
