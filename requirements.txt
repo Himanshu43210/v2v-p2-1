@@ -1,7 +1,7 @@
-pyaudio
 numpy
-faiss-cpu
 scikit-learn
 python-dotenv
 openai
 websockets
+faiss-cpu
+pyaudio
